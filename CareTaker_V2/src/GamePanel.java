@@ -23,32 +23,35 @@ public class GamePanel extends JPanel implements ActionListener {
     private Player player = new Player(keys);
 
     private House house = new House();
-    private Room room;               // the room the player is in right now
-    private String currentKey;       // key of that room, e.g. "bedroom1"
+    private Room room; // the room the player is in right now
+    private String currentKey; // key of that room, e.g. "bedroom1"
 
     // DATA STRUCTURE: ArrayList of GameObject. It holds the furniture, doors,
-    // Caretaker and player of the CURRENT room, so ONE loop can update and draw all.
+    // Caretaker and player of the CURRENT room, so ONE loop can update and draw
+    // all.
     private ArrayList<GameObject> gameObjects = new ArrayList<GameObject>();
 
-    private int bannerTimer = 0;          // frames left for the room name banner
-    private boolean darknessOn = true;    // press L to turn it off while testing art
+    private int bannerTimer = 0; // frames left for the room name banner
+    private boolean darknessOn = true; // press L to turn it off while testing art
+    private boolean lightsOut = false; // press L to turn it off while testing art
     private boolean gameFinished = false;
-    private String escapedName = "";      // which exit the player used
+    private String escapedName = ""; // which exit the player used
 
     public GamePanel() {
         setPreferredSize(new Dimension(Room.SCREEN_COLS * TileMap.TILE_SIZE,
-                                       Room.SCREEN_ROWS * TileMap.TILE_SIZE));
+                Room.SCREEN_ROWS * TileMap.TILE_SIZE));
         setBackground(Color.BLACK);
         setFocusable(true);
         addKeyListener(keys);
 
         loadRoom(House.START_ROOM, null);
 
-        timer = new Timer(16, this);   // calls actionPerformed every 16 ms
+        timer = new Timer(16, this); // calls actionPerformed every 16 ms
         timer.start();
     }
 
-    // Shows a new room. 'fromKey' is the room the player just left (null at the start).
+    // Shows a new room. 'fromKey' is the room the player just left (null at the
+    // start).
     public void loadRoom(String key, String fromKey) {
         currentKey = key;
         room = house.getRoom(key);
@@ -71,15 +74,15 @@ public class GamePanel extends JPanel implements ActionListener {
         player.enterRoom(room, col, row, facing);
 
         gameObjects.clear();
-        gameObjects.addAll(room.getFurniture());   // rugs come first, so they draw underneath
+        gameObjects.addAll(room.getFurniture()); // rugs come first, so they draw underneath
         gameObjects.addAll(room.getDoors());
         if (room.hasCaretaker()) {
             // Phase 4: the Caretaker will be ONE object that walks between rooms.
             gameObjects.add(new Caretaker(room.getCaretakerCol(), room.getCaretakerRow()));
         }
-        gameObjects.add(player);                   // last = drawn on top
+        gameObjects.add(player); // last = drawn on top
 
-        bannerTimer = 150;
+        bannerTimer = 60;
     }
 
     // GAME LOOP: called by the Timer.
@@ -91,11 +94,11 @@ public class GamePanel extends JPanel implements ActionListener {
     private void update() {
         if (keys.lightPressed) {
             keys.lightPressed = false;
-            darknessOn = !darknessOn;
+            lightsOut = !lightsOut;
         }
 
         if (gameFinished) {
-            if (keys.interactPressed) {          // E = play again
+            if (keys.interactPressed) { // E = play again
                 keys.interactPressed = false;
                 gameFinished = false;
                 house = new House();
@@ -105,7 +108,7 @@ public class GamePanel extends JPanel implements ActionListener {
         }
 
         for (GameObject obj : gameObjects) {
-            obj.update();   // each object runs ITS OWN update() (polymorphism)
+            obj.update(); // each object runs ITS OWN update() (polymorphism)
         }
 
         if (bannerTimer > 0) {
@@ -127,9 +130,9 @@ public class GamePanel extends JPanel implements ActionListener {
                     gameFinished = true;
                     escapedName = d.getExitName();
                 } else {
-                    loadRoom(d.getTargetRoom(), currentKey);   // go to the next room
+                    loadRoom(d.getTargetRoom(), currentKey); // go to the next room
                 }
-                return;   // stop here: the room may have just changed
+                return; // stop here: the room may have just changed
             }
         }
     }
@@ -146,43 +149,46 @@ public class GamePanel extends JPanel implements ActionListener {
         int offsetX = room.getOffsetX();
         int offsetY = room.getOffsetY();
         g2.translate(offsetX, offsetY);
-        room.getMap().draw(g2);               // 1. floor and walls
+        room.getMap().draw(g2); // 1. floor and walls
         for (GameObject obj : gameObjects) {
-            obj.draw(g2);                     // 2. rugs, furniture, doors, Caretaker, player
+            obj.draw(g2); // 2. rugs, furniture, doors, Caretaker, player
         }
-        drawInteractPrompt(g2);                 // 3. "E" icon if the player is near furniture
+        drawInteractPrompt(g2); // 3. "E" icon if the player is near furniture
         g2.translate(-offsetX, -offsetY);
 
-        if (darknessOn) {
-            drawDarkness(g2, offsetX, offsetY);   // 3. dark horror lighting
+        if (lightsOut) {
+            drawBlackout(g2); // 3. everything dark.
+        } else if (darknessOn) {
+            drawDarkness(g2, offsetX, offsetY); // 3. dark horror lighting
         }
-        drawHud(g2);                          // 4. portrait, hearts, inventory slots
-        drawMessage(g2);                      // 5. messages from the player
-        drawBanner(g2);                       // 6. room name
+
+        drawHud(g2); // 4. portrait, hearts, inventory slots
+        drawMessage(g2); // 5. messages from the player
+        drawBanner(g2); // 6. room name
         if (gameFinished) {
             drawFinished(g2);
         }
     }
 
-        // A small "E" key icon that floats above the player's head
+    // A small "E" key icon that floats above the player's head
     // whenever there is furniture close enough to interact with.
     private void drawInteractPrompt(Graphics2D g) {
         if (!player.getMessage().equals("")) {
-            return;   // hide it while a message is on screen
+            return; // hide it while a message is on screen
         }
         if (player.findNearestFurniture() == null) {
-            return;   // nothing close enough
+            return; // nothing close enough
         }
 
         int size = 22;
-        int bob = (int) (Math.sin(System.currentTimeMillis() / 180.0) * 3);   // floats up and down
+        int bob = (int) (Math.sin(System.currentTimeMillis() / 180.0) * 3); // floats up and down
         int headTop = player.getY() + player.getHeight() - GameObject.CHARACTER_SIZE * 15 / 16;
         int x = player.getX() + player.getWidth() / 2 - size / 2;
         int y = headTop - size - 2 + bob;
 
         g.setColor(new Color(10, 10, 30, 235));
         g.fillRect(x, y, size, size);
-        g.setColor(new Color(250, 226, 132));                                  // gold border
+        g.setColor(new Color(250, 226, 132)); // gold border
         g.drawRect(x, y, size, size);
         g.setFont(new Font("Monospaced", Font.BOLD, 16));
         FontMetrics fm = g.getFontMetrics();
@@ -190,13 +196,24 @@ public class GamePanel extends JPanel implements ActionListener {
         g.drawString("E", x + (size - fm.stringWidth("E")) / 2, y + 16);
     }
 
+    // Lights out: the whole screen goes almost completely black.
+    private void drawBlackout(Graphics2D g) {
+        g.setColor(new Color(0, 0, 0, 220));
+        g.fillRect(0, 0, getWidth(), getHeight());
+    }
+
     // Dark overlay with a soft circle of light around the player.
     private void drawDarkness(Graphics2D g, int offsetX, int offsetY) {
-        Point2D center = new Point2D.Float(offsetX + player.getX() + player.getWidth() / 2,
-                                           offsetY + player.getY() - 6);
+        Point2D center = new Point2D.Float(offsetX + player.getX() + player.getWidth() / 2, offsetY + player.getY() - 6);
         float[] fractions = { 0f, 0.5f, 1f };
         Color[] colors = { new Color(0, 0, 0, 0), new Color(0, 0, 0, 70), new Color(0, 0, 0, 185) };
-        g.setPaint(new RadialGradientPaint(center, 300f, fractions, colors));
+        /*
+         * 300f Current, large
+         * 220f Medium
+         * 160f Small and spooky
+         * 120f Tiny, only close to the player
+         */
+        g.setPaint(new RadialGradientPaint(center, 160f, fractions, colors));
         g.fillRect(0, 0, getWidth(), getHeight());
     }
 
@@ -239,14 +256,15 @@ public class GamePanel extends JPanel implements ActionListener {
         g.drawString(controls, getWidth() - controlsWidth - 10, 24);
     }
 
-    // DATA STRUCTURE: 2D array. A heart drawn as big pixels (0 = empty, 1 = red, 2 = shine).
+    // DATA STRUCTURE: 2D array. A heart drawn as big pixels (0 = empty, 1 = red, 2
+    // = shine).
     private static final int[][] HEART = {
-        {0, 1, 1, 0, 1, 1, 0},
-        {1, 2, 1, 1, 1, 1, 1},
-        {1, 1, 1, 1, 1, 1, 1},
-        {0, 1, 1, 1, 1, 1, 0},
-        {0, 0, 1, 1, 1, 0, 0},
-        {0, 0, 0, 1, 0, 0, 0}
+            { 0, 1, 1, 0, 1, 1, 0 },
+            { 1, 2, 1, 1, 1, 1, 1 },
+            { 1, 1, 1, 1, 1, 1, 1 },
+            { 0, 1, 1, 1, 1, 1, 0 },
+            { 0, 0, 1, 1, 1, 0, 0 },
+            { 0, 0, 0, 1, 0, 0, 0 }
     };
 
     private void drawHeart(Graphics2D g, int x, int y, boolean filled) {
@@ -254,7 +272,7 @@ public class GamePanel extends JPanel implements ActionListener {
             for (int col = 0; col < HEART[row].length; col++) {
                 int cell = HEART[row][col];
                 if (cell == 0) {
-                    continue;   // skip empty pixels
+                    continue; // skip empty pixels
                 }
                 if (!filled) {
                     g.setColor(new Color(70, 40, 52));
@@ -263,7 +281,7 @@ public class GamePanel extends JPanel implements ActionListener {
                 } else {
                     g.setColor(new Color(224, 56, 70));
                 }
-                g.fillRect(x + col * 3, y + row * 3, 3, 3);   // each pixel is 3x3 on screen
+                g.fillRect(x + col * 3, y + row * 3, 3, 3); // each pixel is 3x3 on screen
             }
         }
     }

@@ -8,12 +8,13 @@ import java.awt.Rectangle;
 public abstract class GameObject {
 
     // How big the player and the Caretaker look on screen, in pixels.
-    // Their pictures are 16x16, so 48 = 3x (same pixel size as the world), 56 = in between, 64 = 4x.
-    public static final int CHARACTER_SIZE = 56;
+    // Their pictures are 16x16, so 48 = 3x (same pixel size as the world), 56 = in
+    // between, 64 = 4x.
+    public static final int CHARACTER_SIZE = 48;
 
     // OOP - ENCAPSULATION: private fields, other classes use getters/setters.
     private int x, y, width, height;
-    private Image sprite;   // stays null until a picture exists
+    private Image sprite; // stays null until a picture exists
 
     // The picture can be BIGGER than the hitbox (like a 16-bit RPG character:
     // the hitbox is just the feet, the picture also shows the head and body).
@@ -25,7 +26,7 @@ public abstract class GameObject {
         this.y = y;
         this.width = width;
         this.height = height;
-        this.spriteWidth = width;     // by default the picture fills the hitbox
+        this.spriteWidth = width; // by default the picture fills the hitbox
         this.spriteHeight = height;
     }
 
@@ -40,6 +41,7 @@ public abstract class GameObject {
 
     // OOP - POLYMORPHISM: every child class writes its OWN version of these.
     public abstract void update();
+
     public abstract void draw(Graphics2D g);
 
     // Draws the picture if there is one. Returns false if not, so the child
@@ -61,16 +63,39 @@ public abstract class GameObject {
     // centered sideways, with the feet lined up with the bottom of the hitbox.
     protected void setCharacterSprite() {
         setSpriteBox(CHARACTER_SIZE, CHARACTER_SIZE,
-                     -(CHARACTER_SIZE - width) / 2,
-                     height - CHARACTER_SIZE * 15 / 16);
+                -(CHARACTER_SIZE - width) / 2,
+                height - CHARACTER_SIZE * 15 / 16);
     }
 
-    public int getX() { return x; }
-    public int getY() { return y; }
-    public int getWidth() { return width; }
-    public int getHeight() { return height; }
-    public Image getSprite() { return sprite; }
-    public void setX(int x) { this.x = x; }
-    public void setY(int y) { this.y = y; }
-    public void setSprite(Image sprite) { this.sprite = sprite; }
+    public int getX() {
+        return x;
+    }
+
+    public int getY() {
+        return y;
+    }
+
+    public int getWidth() {
+        return width;
+    }
+
+    public int getHeight() {
+        return height;
+    }
+
+    public Image getSprite() {
+        return sprite;
+    }
+
+    public void setX(int x) {
+        this.x = x;
+    }
+
+    public void setY(int y) {
+        this.y = y;
+    }
+
+    public void setSprite(Image sprite) {
+        this.sprite = sprite;
+    }
 }
