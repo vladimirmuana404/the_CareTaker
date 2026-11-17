@@ -21,6 +21,10 @@ public class GamePanel extends JPanel implements ActionListener {
     private Timer timer;
     private KeyHandler keys = new KeyHandler();
     private Player player = new Player(keys);
+    private static final int MENU = 0;
+    private static final int PLAYING = 1;
+    private int state = MENU;
+    private MainMenu menu = new MainMenu();
 
     private House house = new House();
     private Room room; // the room the player is in right now
@@ -36,6 +40,23 @@ public class GamePanel extends JPanel implements ActionListener {
     private boolean lightsOut = false; // press L to turn it off while testing art
     private boolean gameFinished = false;
     private String escapedName = ""; // which exit the player used
+
+    private void startGame() {
+        house = new House();
+        loadRoom(House.START_ROOM, null);
+        gameFinished = false;
+        darknessOn = menu.isDarknessOn();
+        keys.interactPressed = false;
+        state = PLAYING;
+    }
+
+    private void goToMenu() {
+        keys.interactPressed = false;
+        keys.backPressed = false;
+        gameFinished = false;
+        menu.reset();
+        state = MENU;
+    }
 
     public GamePanel() {
         setPreferredSize(new Dimension(Room.SCREEN_COLS * TileMap.TILE_SIZE,
@@ -92,17 +113,33 @@ public class GamePanel extends JPanel implements ActionListener {
     }
 
     private void update() {
+
+        if (state == MENU) {
+            String action = menu.update(keys);
+            if (action.equals("play")) {
+                startGame();
+            } else if (action.equals("quit")) {
+                System.exit(0);
+            }
+            return;
+        }
+
+        if (keys.backPressed) { // ESC while playing = back to the menu
+            goToMenu();
+            return;
+        }
+        keys.menuUp = false;
+        keys.menuDown = false;
+        keys.confirmPressed = false;
+
         if (keys.lightPressed) {
             keys.lightPressed = false;
             lightsOut = !lightsOut;
         }
 
         if (gameFinished) {
-            if (keys.interactPressed) { // E = play again
-                keys.interactPressed = false;
-                gameFinished = false;
-                house = new House();
-                loadRoom(House.START_ROOM, null);
+            if (keys.interactPressed) { // E = back to the main menu
+                goToMenu();
             }
             return;
         }
@@ -144,6 +181,11 @@ public class GamePanel extends JPanel implements ActionListener {
         // 16-BIT LOOK: pictures are drawn small (16x16) and scaled up 3x.
         // NEAREST_NEIGHBOR keeps every pixel sharp instead of blurry.
         g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+
+        if (state == MENU) {
+    menu.draw(g2, getWidth(), getHeight());
+    return;
+}
 
         // Draw the room centered in the window (the rest of the window stays black).
         int offsetX = room.getOffsetX();
@@ -204,7 +246,8 @@ public class GamePanel extends JPanel implements ActionListener {
 
     // Dark overlay with a soft circle of light around the player.
     private void drawDarkness(Graphics2D g, int offsetX, int offsetY) {
-        Point2D center = new Point2D.Float(offsetX + player.getX() + player.getWidth() / 2, offsetY + player.getY() - 6);
+        Point2D center = new Point2D.Float(offsetX + player.getX() + player.getWidth() / 2,
+                offsetY + player.getY() - 6);
         float[] fractions = { 0f, 0.5f, 1f };
         Color[] colors = { new Color(0, 0, 0, 0), new Color(0, 0, 0, 70), new Color(0, 0, 0, 185) };
         /*
