@@ -3,9 +3,11 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.Image;
+import java.awt.AlphaComposite;
 import java.awt.RadialGradientPaint;
 import java.awt.geom.Point2D;
-//import java.awt.RenderingHints;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 
 // The main menu: PLAY, SETTINGS, CREDITS, QUIT.
 // It has three screens (the main list, the settings list and the credits).
@@ -40,10 +42,13 @@ public class MainMenu {
     // ASSET LINK: assets/images/menu/menu_bg.png and title.png
     private Image background;
     private Image title;
+    private BufferedImage glowMask;
+    private BufferedImage glowLayer;
 
     public MainMenu() {
         background = AssetLoader.load("images/menu/menu_bg.png");
         title = AssetLoader.load("images/menu/title.png");
+        glowMask = createGlowMask(background);
     }
 
     public boolean isDarknessOn() { return darknessOn; }
@@ -147,7 +152,9 @@ public class MainMenu {
 
         drawGlow(g, w, h);        // 2. pulsing red light from the door
         drawVignette(g, w, h);    // 3. dark edges
-        drawTitle(g, w);          // 4. THE CARETAKER
+        if (screen == MAIN) {
+            drawTitle(g, w, h);   // 4. THE CARETAKER
+        }
 
         // 5. the list on the right
         if (screen == MAIN) {
@@ -172,12 +179,61 @@ public class MainMenu {
     // The red light from the doorway slowly gets brighter and darker.
     private void drawGlow(Graphics2D g, int w, int h) {
         double pulse = 0.5 + 0.5 * Math.sin(System.currentTimeMillis() / 450.0);
-        int alpha = 20 + (int) (pulse * 30);
-        Point2D door = new Point2D.Float(150, 324);
+        int alpha = 35 + (int) (pulse * 160);
+        Point2D door = new Point2D.Float(w * (150f / 768), h * (324f / 576));
         float[] fractions = { 0f, 1f };
         Color[] colors = { new Color(255, 40, 50, alpha), new Color(255, 40, 50, 0) };
-        g.setPaint(new RadialGradientPaint(door, 300f, fractions, colors));
-        g.fillRect(0, 0, w, h);
+        RadialGradientPaint glow = new RadialGradientPaint(door,
+                (250f + (float) pulse * 90f) * Math.min(w / 768f, h / 576f), fractions, colors);
+
+        if (glowMask == null) {
+            g.setPaint(glow);
+            g.fillRect(0, 0, w, h);
+            return;
+        }
+
+        if (glowLayer == null || glowLayer.getWidth() != w || glowLayer.getHeight() != h) {
+            glowLayer = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        }
+        Graphics2D layerGraphics = glowLayer.createGraphics();
+        layerGraphics.setComposite(AlphaComposite.Clear);
+        layerGraphics.fillRect(0, 0, w, h);
+        layerGraphics.setComposite(AlphaComposite.SrcOver);
+        layerGraphics.setPaint(glow);
+        layerGraphics.fillRect(0, 0, w, h);
+        layerGraphics.setComposite(AlphaComposite.DstIn);
+        layerGraphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+                RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
+        layerGraphics.drawImage(glowMask, 0, 0, w, h, null);
+        layerGraphics.dispose();
+        g.drawImage(glowLayer, 0, 0, null);
+    }
+
+    private BufferedImage createGlowMask(Image image) {
+        if (image == null || image.getWidth(null) <= 0 || image.getHeight(null) <= 0) {
+            return null;
+        }
+
+        int width = image.getWidth(null);
+        int height = image.getHeight(null);
+        BufferedImage pixelsImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D imageGraphics = pixelsImage.createGraphics();
+        imageGraphics.drawImage(image, 0, 0, null);
+        imageGraphics.dispose();
+
+        int[] pixels = pixelsImage.getRGB(0, 0, width, height, null, 0, width);
+        for (int i = 0; i < pixels.length; i++) {
+            int red = (pixels[i] >>> 16) & 0xff;
+            int green = (pixels[i] >>> 8) & 0xff;
+            int blue = pixels[i] & 0xff;
+            int brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+            int maskAlpha = Math.max(0, Math.min(255, (brightness - 10) * 6));
+            pixels[i] = (maskAlpha << 24) | 0x00ffffff;
+        }
+
+        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        mask.setRGB(0, 0, width, height, pixels, 0, width);
+        return mask;
     }
 
     private void drawVignette(Graphics2D g, int w, int h) {
@@ -188,20 +244,51 @@ public class MainMenu {
         g.fillRect(0, 0, w, h);
     }
 
-    private void drawTitle(Graphics2D g, int w) {
-        if (title != null) {
-            int tw = title.getWidth(null) * 3;      // the picture is zoomed 3x like the rest of the game
-            int th = title.getHeight(null) * 3;
-            g.drawImage(title, w - tw - 36, 60, tw, th, null);
+    private void drawTitle(Graphics2D g, int w, int h) {
+        int centerX = Math.round(w * (535f / 768));
+        centerX = Math.max(16, Math.min(w - 16, centerX));
+        int maxWidth = Math.min(340, 2 * Math.min(centerX - 16, w - 16 - centerX));
+        int bottom = Math.round(h * (241f / 576));
+        int maxHeight = Math.min(220, bottom - 20);
+        if (maxWidth <= 0 || maxHeight <= 0) {
+            return;
+        }
+
+        if (title != null && title.getWidth(null) > 0 && title.getHeight(null) > 0) {
+            int picW = title.getWidth(null);
+            int picH = title.getHeight(null);
+            double scale = Math.min((double) maxWidth / picW, (double) maxHeight / picH);
+            int titleWidth = (int) (picW * scale);
+            int titleHeight = (int) (picH * scale);
+
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+            g.drawImage(title, centerX - titleWidth / 2, bottom - titleHeight,
+                    titleWidth, titleHeight, null);
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         } else {
-            // PLACEHOLDER title (measured so it always fits on the right side)
             g.setColor(new Color(220, 44, 52));
-            g.setFont(new Font("Serif", Font.BOLD | Font.ITALIC, 44));
-            int textWidth = g.getFontMetrics().stringWidth("CARETAKER");
-            int titleX = w - textWidth - 36;
-            g.drawString("CARETAKER", titleX, 165);
-            g.setFont(new Font("Serif", Font.BOLD | Font.ITALIC, 26));
-            g.drawString("THE", titleX + 24, 112);
+            int titleFontSize = 44;
+            Font titleFont = new Font("Serif", Font.BOLD | Font.ITALIC, titleFontSize);
+            Font subtitleFont = new Font("Serif", Font.BOLD | Font.ITALIC, 26);
+            FontMetrics titleMetrics = g.getFontMetrics(titleFont);
+            FontMetrics subtitleMetrics = g.getFontMetrics(subtitleFont);
+            while (titleFontSize > 1
+                    && (titleMetrics.stringWidth("CARETAKER") > maxWidth
+                            || titleMetrics.getHeight() + subtitleMetrics.getHeight() + 6 > maxHeight)) {
+                titleFontSize--;
+                titleFont = new Font("Serif", Font.BOLD | Font.ITALIC, titleFontSize);
+                subtitleFont = new Font("Serif", Font.BOLD | Font.ITALIC, Math.max(1, titleFontSize * 26 / 44));
+                titleMetrics = g.getFontMetrics(titleFont);
+                subtitleMetrics = g.getFontMetrics(subtitleFont);
+            }
+            if (titleMetrics.stringWidth("CARETAKER") > maxWidth
+                    || titleMetrics.getHeight() + subtitleMetrics.getHeight() + 6 > maxHeight) {
+                return;
+            }
+            g.setFont(titleFont);
+            g.drawString("CARETAKER", centerX - titleMetrics.stringWidth("CARETAKER") / 2, bottom - 4);
+            g.setFont(subtitleFont);
+            drawCentered(g, "THE", centerX, bottom - titleMetrics.getHeight() - 6);
         }
     }
 
@@ -209,7 +296,7 @@ public class MainMenu {
     private void drawItems(Graphics2D g, String[] labels) {
         g.setFont(new Font("Monospaced", Font.BOLD, 26));
         for (int i = 0; i < labels.length; i++) {
-            int centerY = 335 + i * 58;
+            int centerY = 280 + i * 58;
             if (i == selected) {
                 g.setColor(new Color(40, 8, 12, 210));
                 g.fillRect(400, centerY - 23, 270, 46);
